@@ -346,6 +346,8 @@ function saveEmojis(i) {
 function tier(p)   { return p<1100?'low':p<=1400?'mid':'high'; }
 function pcolor(p) { return p<1100?'#34d399':p<=1400?'#fbbf24':'#f87171'; }
 
+let rafPending = false;
+
 // ── Map math ──────────────────────────────────────────────────────────────────
 const TILE = 256;
 function latLngToWorld(lat,lng,z){
@@ -399,7 +401,7 @@ function loadTile(z, tx, ty) {
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.src = getTileUrl(z, tx, ty);
-  img.onload  = () => { tileCache[key] = img; draw(); };
+  img.onload  = () => { tileCache[key] = img; if(!rafPending){ rafPending=true; requestAnimationFrame(()=>{ draw(); rafPending=false; }); } };
   img.onerror = () => { tileCache[key] = 'err'; };
   tileCache[key] = null; // loading
   return null;
@@ -578,8 +580,7 @@ function addAptToSidebar(i, isNew){
   updateSidebarEmojis(i);
 }
 
-// Build sidebar for all current APTS (built-in + custom already pushed)
-APTS.forEach((_,i) => addAptToSidebar(i, false));
+// Sidebar built inside initApp() after custom apts are loaded
 
 function updateSidebarEmojis(i){
   const el=document.getElementById(`sb-em-${i}`);
@@ -627,7 +628,6 @@ canvas.addEventListener('mousedown',e=>{
   isPanning=true; panStart={x:e.clientX,y:e.clientY,lat:centerLat,lng:centerLng};
   canvas.classList.add('panning');
 });
-let rafPending=false;
 window.addEventListener('mousemove',e=>{
   if(!wrap.contains(e.target)&&!isPanning) return;
   const rect=canvas.getBoundingClientRect();
@@ -947,6 +947,9 @@ function initApp(){
       amenities.push([]);
     });
   } catch(e){}
+
+  // Build sidebar for ALL apts (built-ins + custom loaded above)
+  APTS.forEach((_,i) => addAptToSidebar(i, false));
 
   buildAmenityGrids();
   window.addEventListener('resize', resize);
