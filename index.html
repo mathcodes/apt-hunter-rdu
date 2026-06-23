@@ -320,44 +320,96 @@ function unproject(cx,cy){
   return {lat,lng};
 }
 
+// ── Tile cache ────────────────────────────────────────────────────────────────
+const tileCache = {};
+const TILE_SERVERS = [
+  'https://a.tile.openstreetmap.org',
+  'https://b.tile.openstreetmap.org',
+  'https://c.tile.openstreetmap.org',
+];
+let tileServerIdx = 0;
+
+function getTileUrl(z, x, y) {
+  const base = TILE_SERVERS[tileServerIdx % TILE_SERVERS.length];
+  tileServerIdx++;
+  return `${base}/${z}/${x}/${y}.png`;
+}
+
+function loadTile(z, tx, ty) {
+  const key = `${z}/${tx}/${ty}`;
+  if (tileCache[key]) return tileCache[key];
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = getTileUrl(z, tx, ty);
+  img.onload  = () => { tileCache[key] = img; draw(); };
+  img.onerror = () => { tileCache[key] = 'err'; };
+  tileCache[key] = null; // loading
+  return null;
+}
+
+function drawTiles() {
+  const z = Math.floor(zoomLevel);
+  const scale = TILE * Math.pow(2, z);
+  const center = latLngToWorld(centerLat, centerLng, z);
+
+  // Tile coords at canvas center
+  const tileX0 = center.x / TILE;
+  const tileY0 = center.y / TILE;
+
+  const tilesX = Math.ceil(W / TILE) + 2;
+  const tilesY = Math.ceil(H / TILE) + 2;
+
+  const startTX = Math.floor(tileX0 - tilesX / 2);
+  const startTY = Math.floor(tileY0 - tilesY / 2);
+
+  // Dark tint overlay to match app theme
+  ctx.fillStyle = '#1a1f2e';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let tx = startTX; tx <= startTX + tilesX; tx++) {
+    for (let ty = startTY; ty <= startTY + tilesY; ty++) {
+      const maxTile = Math.pow(2, z);
+      if (ty < 0 || ty >= maxTile) continue;
+      const wrappedTX = ((tx % maxTile) + maxTile) % maxTile;
+
+      const img = loadTile(z, wrappedTX, ty);
+
+      // Pixel position of this tile's top-left corner
+      const px = W / 2 + (tx - tileX0) * TILE;
+      const py = H / 2 + (ty - tileY0) * TILE;
+
+      if (img && img !== 'err') {
+        // Draw tile with dark multiply effect
+        ctx.globalAlpha = 1;
+        ctx.drawImage(img, px, py, TILE, TILE);
+        // Dark overlay to desaturate and darken for dark theme
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = '#0d1220';
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  // OSM attribution (required)
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = '#fff';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('© OpenStreetMap contributors', W - 4, H - 4);
+  ctx.textAlign = 'left';
+  ctx.globalAlpha = 1;
+}
+
 // ── Draw ──────────────────────────────────────────────────────────────────────
 function draw(){
   ctx.clearRect(0,0,W,H);
-  ctx.fillStyle='#1a1f2e'; ctx.fillRect(0,0,W,H);
-  drawGrid();
+  drawTiles();
   APTS.forEach((_,i)=>{
     if(activeFilter!=='all'&&tier(APTS[i].price)!==activeFilter) return;
     const {x,y}=project(APTS[i].lat,APTS[i].lng);
     if(x<-40||x>W+40||y<-40||y>H+40) return;
     drawPin(x,y,i,i===activeIdx,i===hoveredIdx);
-  });
-}
-
-function drawGrid(){
-  ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.lineWidth=1;
-  const step=zoomLevel<10?1:zoomLevel<12?.5:.1;
-  const tl=unproject(0,0), br=unproject(W,H);
-  const latStart=Math.floor(br.lat/step)*step, latEnd=Math.ceil(tl.lat/step)*step;
-  const lngStart=Math.floor(tl.lng/step)*step, lngEnd=Math.ceil(br.lng/step)*step;
-  for(let la=latStart;la<=latEnd;la+=step){
-    const {y}=project(la,centerLng);
-    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
-    ctx.fillStyle='rgba(255,255,255,.12)';ctx.font='9px monospace';
-    ctx.fillText(la.toFixed(1)+'°',4,y-2);
-  }
-  for(let lo=lngStart;lo<=lngEnd;lo+=step){
-    const {x}=project(centerLat,lo);
-    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
-    ctx.fillStyle='rgba(255,255,255,.12)';ctx.font='9px monospace';
-    ctx.fillText(lo.toFixed(1)+'°',x+2,10);
-  }
-  [{name:'RALEIGH',lat:35.779,lng:-78.638},{name:'DURHAM',lat:35.994,lng:-78.899},
-   {name:'CARY',lat:35.791,lng:-78.781},{name:'GARNER',lat:35.707,lng:-78.614},
-   {name:'KNIGHTDALE',lat:35.787,lng:-78.490}].forEach(c=>{
-    const {x,y}=project(c.lat,c.lng);
-    if(x<0||x>W||y<0||y>H) return;
-    ctx.fillStyle='rgba(255,255,255,.15)'; ctx.font='bold 11px monospace';
-    ctx.fillText(c.name,x,y);
   });
 }
 
