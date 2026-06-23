@@ -418,32 +418,46 @@ function drawPin(x,y,i,isActive,isHovered){
   const emojis=amenities[i];
   const hasEmojis=emojis&&emojis.length>0;
   const c=pcolor(apt.price);
-  const r=isActive?16:isHovered?13:hasEmojis?12:10;
-
-  ctx.shadowColor=c; ctx.shadowBlur=isActive?16:isHovered?8:4;
-  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
-  ctx.fillStyle=c; ctx.fill();
-  ctx.shadowBlur=0;
 
   if(hasEmojis){
-    // Emoji grid inside pin
-    ctx.beginPath(); ctx.arc(x,y,r*.95,0,Math.PI*2);
+    const n=emojis.length;
+    const cols=n<=2?n:n<=4?2:3;
+    const rows=Math.ceil(n/cols);
+
+    // Emoji size: start at 18px, shrink 1.5px per emoji beyond 4, floor at 9px (half of 18)
+    const BASE_EMOJI=18, MIN_EMOJI=9;
+    const eSize=Math.max(MIN_EMOJI, BASE_EMOJI-(n>4?(n-4)*1.5:0));
+    const pad=2;
+    const gridW=cols*eSize+(cols-1)*pad;
+    const gridH=rows*eSize+(rows-1)*pad;
+
+    // Pin expands to contain the grid — never smaller than base radius
+    const baseR=isActive?16:isHovered?13:10;
+    const r=Math.max(baseR, Math.ceil(Math.sqrt((gridW/2)**2+(gridH/2)**2))+5);
+
+    ctx.shadowColor=c; ctx.shadowBlur=isActive?16:isHovered?8:4;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=c; ctx.fill();
+    ctx.shadowBlur=0;
+
+    ctx.beginPath(); ctx.arc(x,y,r-2,0,Math.PI*2);
     ctx.fillStyle='#0f1117'; ctx.fill();
 
-    const cols=emojis.length<=2?emojis.length:emojis.length<=4?2:3;
-    const rows=Math.ceil(emojis.length/cols);
-    const eSize=Math.min(r*1.1, (r*1.7)/Math.max(cols,rows));
-    const startX=x-(cols-1)*eSize*0.55;
-    const startY=y-(rows-1)*eSize*0.55;
     ctx.font=`${eSize}px serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
+    const startX=x-(gridW/2)+(eSize/2);
+    const startY=y-(gridH/2)+(eSize/2);
     emojis.forEach((em,ei)=>{
       const col=ei%cols, row=Math.floor(ei/cols);
-      ctx.fillText(em, startX+col*eSize*1.1, startY+row*eSize*1.1);
+      ctx.fillText(em, startX+col*(eSize+pad), startY+row*(eSize+pad));
     });
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   } else {
-    // Plain price label
+    const r=isActive?16:isHovered?13:10;
+    ctx.shadowColor=c; ctx.shadowBlur=isActive?16:isHovered?8:4;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=c; ctx.fill();
+    ctx.shadowBlur=0;
     ctx.beginPath(); ctx.arc(x,y,r*.58,0,Math.PI*2);
     ctx.fillStyle='#0f1117'; ctx.fill();
     if(isActive||isHovered||zoomLevel>=12){
