@@ -11,16 +11,16 @@
   --text:#e2e6f0; --muted:#6b7280; --accent:#4f8ef7;
   --green:#34d399; --yellow:#fbbf24; --red:#f87171;
 }
-html, body { height:100%; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,sans-serif; overflow:hidden; }
+html,body { height:100%; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,sans-serif; overflow:hidden; }
 
 header {
   height:50px; display:flex; align-items:center; justify-content:space-between;
   padding:0 16px; background:var(--surface); border-bottom:1px solid var(--border);
-  gap:8px; position:relative; z-index:9999; flex-wrap:wrap;
+  flex-wrap:wrap; gap:8px; position:relative; z-index:9999;
 }
 .logo { font-family:monospace; font-size:13px; font-weight:700; letter-spacing:.1em; color:var(--accent); }
 .logo span { color:var(--muted); font-weight:400; }
-.controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.controls { display:flex; align-items:center; gap:8px; }
 .filter-label { font-size:10px; font-family:monospace; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; }
 .chips { display:flex; gap:4px; }
 .chip { font-family:monospace; font-size:10px; padding:3px 8px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; transition:all .12s; }
@@ -35,7 +35,7 @@ header {
 .layout { display:flex; height:calc(100vh - 50px); }
 
 /* Sidebar */
-.sidebar { width:270px; min-width:220px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; z-index:100; }
+.sidebar { width:270px; min-width:220px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
 .sb-hdr { padding:7px 12px; border-bottom:1px solid var(--border); font-family:monospace; font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; display:flex; justify-content:space-between; }
 .apt-list { overflow-y:auto; flex:1; }
 .apt-list::-webkit-scrollbar { width:3px; }
@@ -45,60 +45,100 @@ header {
 .apt-item.active { background:rgba(79,142,247,.13); border-left-color:var(--accent); }
 .apt-item.hidden { display:none; }
 .apt-name { font-size:11px; font-weight:500; color:var(--text); margin-bottom:2px; line-height:1.3; }
-.apt-meta { display:flex; gap:6px; align-items:center; }
+.apt-meta { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
 .ptag { font-family:monospace; font-size:11px; font-weight:700; }
 .ptag.low  { color:var(--green); }
 .ptag.mid  { color:var(--yellow); }
 .ptag.high { color:var(--red); }
 .ltag { font-family:monospace; font-size:9px; color:var(--muted); }
+.emojis-sb { font-size:9px; letter-spacing:1px; line-height:1.2; }
 
-/* Map area */
-.map-wrap { flex:1; position:relative; overflow:hidden; }
+/* Map */
+.map-wrap { flex:1; position:relative; overflow:hidden; background:#1a1f2e; }
+#mapCanvas { position:absolute; top:0; left:0; cursor:grab; }
+#mapCanvas.panning { cursor:grabbing; }
 
-/* Leaflet loaded from CDN — map fills container */
-#map { width:100%; height:100%; }
-
-/* Custom pin markers */
-.apt-pin {
-  width:28px; height:28px; border-radius:50%;
-  border:2px solid #0f1117;
-  display:flex; align-items:center; justify-content:center;
-  font-family:monospace; font-size:7px; font-weight:700;
-  color:#0f1117; cursor:pointer;
-  box-shadow:0 2px 8px rgba(0,0,0,.5);
-  transition:transform .15s;
-  white-space:nowrap;
-  line-height:1;
-}
-.apt-pin:hover { transform:scale(1.3); z-index:9999 !important; }
-.apt-pin.active { transform:scale(1.4); z-index:9999 !important; box-shadow:0 0 0 3px white, 0 4px 12px rgba(0,0,0,.6); }
-
-/* Tooltip */
+/* Tooltip (hover preview) */
 #tooltip {
   position:absolute; background:var(--surface); border:1px solid var(--border);
-  border-radius:6px; padding:10px 12px; font-size:11px;
-  min-width:190px; max-width:240px; pointer-events:none;
-  display:none; z-index:10000; box-shadow:0 6px 20px rgba(0,0,0,.7);
-  line-height:1.6;
+  border-radius:6px; padding:10px 12px; font-size:11px; min-width:180px; max-width:240px;
+  pointer-events:none; display:none; z-index:100; box-shadow:0 6px 20px rgba(0,0,0,.6); line-height:1.5;
 }
-.t-name  { font-weight:600; font-size:12px; margin-bottom:3px; }
-.t-price { font-family:monospace; font-size:13px; font-weight:700; }
-.t-lease { font-family:monospace; font-size:9px; color:var(--muted); }
-.t-addr  { font-size:10px; color:#9ca3af; margin-top:4px; }
-.t-link  { display:inline-block; margin-top:6px; font-family:monospace; font-size:10px; color:var(--accent); text-decoration:none; pointer-events:all; }
+#tooltip .t-name  { font-weight:600; font-size:12px; margin-bottom:4px; }
+#tooltip .t-price { font-family:monospace; font-size:14px; font-weight:700; }
+#tooltip .t-lease { font-family:monospace; font-size:9px; color:var(--muted); margin-bottom:5px; }
+#tooltip .t-addr  { font-size:10px; color:#9ca3af; }
+#tooltip .t-emojis { font-size:11px; margin-top:5px; letter-spacing:2px; }
+#tooltip .t-hint  { font-size:9px; color:var(--accent); margin-top:4px; font-family:monospace; }
+
+/* Zoom */
+.zoom-ctrl { position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:2px; z-index:50; }
+.zbtn { width:28px; height:28px; background:var(--surface); border:1px solid var(--border); color:var(--text); font-size:16px; cursor:pointer; border-radius:4px; display:flex; align-items:center; justify-content:center; transition:background .1s; }
+.zbtn:hover { background:var(--border); }
 
 /* Legend */
-.legend {
-  position:absolute; bottom:24px; right:12px; z-index:1000;
-  background:var(--surface); border:1px solid var(--border);
-  border-radius:6px; padding:8px 12px; font-family:monospace; font-size:10px;
-}
+.legend { position:absolute; bottom:14px; right:12px; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:8px 12px; z-index:50; font-family:monospace; font-size:10px; }
 .legend-row { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
 .legend-row:last-child { margin-bottom:0; }
 .ldot { width:10px; height:10px; border-radius:50%; }
+
+/* ── Amenity Modal ── */
+#amenityModal {
+  display:none; position:fixed; inset:0; z-index:10000;
+  background:rgba(0,0,0,.7); backdrop-filter:blur(4px);
+  align-items:center; justify-content:center;
+}
+#amenityModal.open { display:flex; }
+.modal-box {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; width:360px; max-width:95vw;
+  box-shadow:0 16px 48px rgba(0,0,0,.8);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.modal-head {
+  padding:12px 14px 10px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
+}
+.modal-title { font-size:13px; font-weight:600; line-height:1.3; }
+.modal-sub   { font-size:10px; color:var(--muted); font-family:monospace; margin-top:2px; }
+.modal-close { background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer; line-height:1; padding:0 2px; flex-shrink:0; }
+.modal-close:hover { color:var(--text); }
+
+.modal-body { padding:12px 14px; }
+.amenity-section-label { font-size:9px; font-family:monospace; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; margin-bottom:6px; }
+.amenity-grid {
+  display:grid; grid-template-columns:repeat(6,1fr); gap:4px; margin-bottom:12px;
+}
+.amenity-btn {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:5px 2px; border-radius:5px; border:1px solid var(--border);
+  background:transparent; cursor:pointer; transition:all .12s; gap:2px;
+}
+.amenity-btn:hover { border-color:var(--accent); background:rgba(79,142,247,.08); }
+.amenity-btn.selected { border-color:var(--accent); background:rgba(79,142,247,.18); }
+.amenity-em { font-size:18px; line-height:1; }
+.amenity-lbl { font-size:7px; color:var(--muted); font-family:monospace; text-align:center; line-height:1.1; }
+
+.modal-preview {
+  background:var(--bg); border:1px solid var(--border); border-radius:6px;
+  padding:8px 10px; margin-bottom:10px; min-height:32px;
+  font-size:14px; letter-spacing:3px; line-height:1.4;
+}
+.modal-preview-label { font-size:9px; color:var(--muted); font-family:monospace; margin-bottom:4px; }
+
+.modal-foot { display:flex; gap:6px; padding:10px 14px; border-top:1px solid var(--border); }
+.btn-save {
+  flex:1; padding:7px; background:var(--accent); border:none; border-radius:5px;
+  color:#fff; font-family:monospace; font-size:11px; font-weight:600; cursor:pointer; transition:opacity .12s;
+}
+.btn-save:hover { opacity:.85; }
+.btn-clear {
+  padding:7px 12px; background:transparent; border:1px solid var(--border);
+  border-radius:5px; color:var(--muted); font-family:monospace; font-size:11px; cursor:pointer; transition:all .12s;
+}
+.btn-clear:hover { border-color:var(--red); color:var(--red); }
 </style>
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 </head>
 <body>
 
@@ -121,26 +161,89 @@ header {
     <div class="sb-hdr"><span>Apartment</span><span>Price</span></div>
     <div class="apt-list" id="aptList"></div>
   </div>
-  <div class="map-wrap">
-    <div id="map"></div>
-    <div id="tooltip">
-      <div class="t-name"  id="tName"></div>
-      <div class="t-price" id="tPrice"></div>
-      <div class="t-lease" id="tLease"></div>
-      <div class="t-addr"  id="tAddr"></div>
-      <a   class="t-link"  id="tLink" target="_blank">→ Open in Google Maps</a>
+  <div class="map-wrap" id="mapWrap">
+    <canvas id="mapCanvas"></canvas>
+    <div class="zoom-ctrl">
+      <button class="zbtn" onclick="zoom(1)">+</button>
+      <button class="zbtn" onclick="zoom(-1)">−</button>
     </div>
     <div class="legend">
       <div class="legend-row"><div class="ldot" style="background:#34d399"></div>Under $1,100</div>
       <div class="legend-row"><div class="ldot" style="background:#fbbf24"></div>$1,100–$1,400</div>
       <div class="legend-row"><div class="ldot" style="background:#f87171"></div>Over $1,400</div>
     </div>
+    <div id="tooltip">
+      <div class="t-name"  id="tName"></div>
+      <div class="t-price" id="tPrice"></div>
+      <div class="t-lease" id="tLease"></div>
+      <div class="t-addr"  id="tAddr"></div>
+      <div class="t-emojis" id="tEmojis"></div>
+      <div class="t-hint"  id="tHint"></div>
+    </div>
   </div>
 </div>
 
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Amenity Modal -->
+<div id="amenityModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="mTitle"></div>
+        <div class="modal-sub"  id="mSub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="amenity-section-label">Outdoor</div>
+      <div class="amenity-grid" id="grid-outdoor"></div>
+
+      <div class="amenity-section-label">Indoor</div>
+      <div class="amenity-grid" id="grid-indoor"></div>
+
+      <div class="amenity-section-label">Pet &amp; Family</div>
+      <div class="amenity-grid" id="grid-pet"></div>
+
+      <div class="amenity-section-label">Practical</div>
+      <div class="amenity-grid" id="grid-practical"></div>
+
+      <div class="modal-preview-label">Pin preview</div>
+      <div class="modal-preview" id="mPreview">—</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-clear" onclick="clearAmenities()">Clear</button>
+      <button class="btn-save"  onclick="saveAmenities()">Save to pin</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ── Amenity definitions ────────────────────────────────────────────────────────
+const AMENITY_GROUPS = {
+  outdoor: [
+    {e:'🏊',l:'Pool'},     {e:'🛝',l:'Playground'},{e:'🌳',l:'Trails'},
+    {e:'🏀',l:'Court'},    {e:'⛳',l:'Putting'},   {e:'🔥',l:'Fire Pit'},
+    {e:'🌿',l:'Garden'},   {e:'🏖️',l:'Sundeck'},  {e:'🎾',l:'Tennis'},
+    {e:'🚲',l:'Bike'},     {e:'🅿️',l:'Parking'},  {e:'🚗',l:'Garage'},
+  ],
+  indoor: [
+    {e:'🏋️',l:'Gym'},      {e:'🎱',l:'Pool Tbl'}, {e:'🎮',l:'Game Rm'},
+    {e:'📚',l:'Library'},  {e:'🛋️',l:'Lounge'},   {e:'☕',l:'Coffee'},
+    {e:'🎬',l:'Theater'},  {e:'🧖',l:'Spa'},       {e:'🧺',l:'Laundry'},
+    {e:'📦',l:'Storage'},  {e:'🏢',l:'Co-Work'},  {e:'🎉',l:'Events'},
+  ],
+  pet: [
+    {e:'🐕',l:'Dog Park'}, {e:'🐾',l:'Pet Wash'}, {e:'🐱',l:'Cat OK'},
+    {e:'🧒',l:'Childcare'},{e:'🏫',l:'Sch Dist'}, {e:'👶',l:'Family'},
+  ],
+  practical: [
+    {e:'🔒',l:'Gated'},    {e:'📹',l:'Security'}, {e:'♿',l:'ADA'},
+    {e:'📬',l:'Mail Rm'},  {e:'🛗',l:'Elevator'}, {e:'🌐',l:'WiFi Incl'},
+    {e:'⚡',l:'EV Charge'},{e:'♻️',l:'Recycle'},  {e:'🚌',l:'Transit'},
+  ],
+};
+
+// ── Apartment data ─────────────────────────────────────────────────────────────
 const APTS = [
   {name:"Lofts at Lakeview",              price:1595,lease:"6-mo", lat:36.0091,lng:-78.9463,addr:"2616 Erwin Rd, Durham, NC 27705"},
   {name:"Taryn at 401",                   price:1481,lease:"12-mo",lat:35.6762,lng:-78.6862,addr:"310 Taryn Ave, Raleigh, NC 27603"},
@@ -171,116 +274,414 @@ const APTS = [
   {name:"The Ashton Apartments",          price:1292,lease:"12-mo",lat:35.8767,lng:-78.7306,addr:"8224 Green Lantern St, Raleigh, NC 27613"},
 ];
 
-function tier(p)  { return p<1100?'low':p<=1400?'mid':'high'; }
-function pcolor(p){ return p<1100?'#34d399':p<=1400?'#fbbf24':'#f87171'; }
-
-// ── Init Leaflet map ──────────────────────────────────────────────────────────
-const map = L.map('map', { zoomControl:false }).setView([35.830, -78.680], 11);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  maxZoom:19,
-}).addTo(map);
-
-L.control.zoom({ position:'topright' }).addTo(map);
-
-// ── Tooltip ───────────────────────────────────────────────────────────────────
-const tooltip   = document.getElementById('tooltip');
-const mapWrap   = document.querySelector('.map-wrap');
-let activeIdx   = null;
-let activeFilter = 'all';
-const markers   = [];
-
-function showTooltip(i, markerEl) {
-  const apt = APTS[i];
-  document.getElementById('tName').textContent  = apt.name;
-  document.getElementById('tPrice').textContent = '$' + apt.price.toLocaleString() + '/mo';
-  document.getElementById('tPrice').style.color = pcolor(apt.price);
-  document.getElementById('tLease').textContent = apt.lease + ' lease';
-  document.getElementById('tAddr').textContent  = apt.addr;
-  document.getElementById('tLink').href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(apt.addr);
-  tooltip.style.display = 'block';
-}
-function hideTooltip() { tooltip.style.display = 'none'; }
-
-// ── Build markers ─────────────────────────────────────────────────────────────
-APTS.forEach((apt, i) => {
-  const icon = L.divIcon({
-    className: '',
-    html: `<div class="apt-pin" id="pin-${i}" style="background:${pcolor(apt.price)}">$${Math.round(apt.price/100)/10}k</div>`,
-    iconSize: [28,28],
-    iconAnchor:[14,14],
-  });
-
-  const marker = L.marker([apt.lat, apt.lng], { icon, zIndexOffset: i })
-    .addTo(map);
-
-  marker.on('click', () => selectApt(i));
-  markers.push(marker);
+// Per-apartment emoji sets (persisted in localStorage)
+const amenities = APTS.map((_,i) => {
+  try { return JSON.parse(localStorage.getItem(`apt_emojis_${i}`)) || []; } catch { return []; }
 });
 
+function saveEmojis(i) {
+  try { localStorage.setItem(`apt_emojis_${i}`, JSON.stringify(amenities[i])); } catch {}
+}
+
+function tier(p)   { return p<1100?'low':p<=1400?'mid':'high'; }
+function pcolor(p) { return p<1100?'#34d399':p<=1400?'#fbbf24':'#f87171'; }
+
+// ── Map math ──────────────────────────────────────────────────────────────────
+const TILE = 256;
+function latLngToWorld(lat,lng,z){
+  const scale=TILE*Math.pow(2,z);
+  const x=(lng+180)/360*scale;
+  const sinLat=Math.sin(lat*Math.PI/180);
+  const y=(0.5-Math.log((1+sinLat)/(1-sinLat))/(4*Math.PI))*scale;
+  return {x,y};
+}
+
+const canvas=document.getElementById('mapCanvas');
+const ctx=canvas.getContext('2d');
+const wrap=document.getElementById('mapWrap');
+let W,H,zoomLevel=11,centerLat=35.830,centerLng=-78.680;
+let activeFilter='all',activeIdx=null,hoveredIdx=null;
+let isPanning=false,panStart=null;
+
+function resize(){ W=wrap.clientWidth; H=wrap.clientHeight; canvas.width=W; canvas.height=H; draw(); }
+
+function project(lat,lng){
+  const center=latLngToWorld(centerLat,centerLng,zoomLevel);
+  const pt=latLngToWorld(lat,lng,zoomLevel);
+  return {x:W/2+(pt.x-center.x), y:H/2+(pt.y-center.y)};
+}
+function unproject(cx,cy){
+  const scale=TILE*Math.pow(2,zoomLevel);
+  const center=latLngToWorld(centerLat,centerLng,zoomLevel);
+  const wx=center.x+(cx-W/2), wy=center.y+(cy-H/2);
+  const lng=wx/scale*360-180;
+  const n=Math.PI-2*Math.PI*wy/scale;
+  const lat=180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n)));
+  return {lat,lng};
+}
+
+// ── Tile cache ────────────────────────────────────────────────────────────────
+const tileCache = {};
+const TILE_SERVERS = [
+  'https://a.tile.openstreetmap.org',
+  'https://b.tile.openstreetmap.org',
+  'https://c.tile.openstreetmap.org',
+];
+let tileServerIdx = 0;
+
+function getTileUrl(z, x, y) {
+  const base = TILE_SERVERS[tileServerIdx % TILE_SERVERS.length];
+  tileServerIdx++;
+  return `${base}/${z}/${x}/${y}.png`;
+}
+
+function loadTile(z, tx, ty) {
+  const key = `${z}/${tx}/${ty}`;
+  if (tileCache[key]) return tileCache[key];
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = getTileUrl(z, tx, ty);
+  img.onload  = () => { tileCache[key] = img; draw(); };
+  img.onerror = () => { tileCache[key] = 'err'; };
+  tileCache[key] = null; // loading
+  return null;
+}
+
+function drawTiles() {
+  const z = Math.floor(zoomLevel);
+  const scale = TILE * Math.pow(2, z);
+  const center = latLngToWorld(centerLat, centerLng, z);
+
+  // Tile coords at canvas center
+  const tileX0 = center.x / TILE;
+  const tileY0 = center.y / TILE;
+
+  const tilesX = Math.ceil(W / TILE) + 2;
+  const tilesY = Math.ceil(H / TILE) + 2;
+
+  const startTX = Math.floor(tileX0 - tilesX / 2);
+  const startTY = Math.floor(tileY0 - tilesY / 2);
+
+  // Dark tint overlay to match app theme
+  ctx.fillStyle = '#1a1f2e';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let tx = startTX; tx <= startTX + tilesX; tx++) {
+    for (let ty = startTY; ty <= startTY + tilesY; ty++) {
+      const maxTile = Math.pow(2, z);
+      if (ty < 0 || ty >= maxTile) continue;
+      const wrappedTX = ((tx % maxTile) + maxTile) % maxTile;
+
+      const img = loadTile(z, wrappedTX, ty);
+
+      // Pixel position of this tile's top-left corner
+      const px = W / 2 + (tx - tileX0) * TILE;
+      const py = H / 2 + (ty - tileY0) * TILE;
+
+      if (img && img !== 'err') {
+        // Draw tile with dark multiply effect
+        ctx.globalAlpha = 1;
+        ctx.drawImage(img, px, py, TILE, TILE);
+        // Dark overlay to desaturate and darken for dark theme
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = '#0d1220';
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  // OSM attribution (required)
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = '#fff';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('© OpenStreetMap contributors', W - 4, H - 4);
+  ctx.textAlign = 'left';
+  ctx.globalAlpha = 1;
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#1a1f2e'; ctx.fillRect(0,0,W,H);
+  drawGrid();
+  drawTiles();
+  APTS.forEach((_,i)=>{
+    if(activeFilter!=='all'&&tier(APTS[i].price)!==activeFilter) return;
+    const {x,y}=project(APTS[i].lat,APTS[i].lng);
+    if(x<-40||x>W+40||y<-40||y>H+40) return;
+    drawPin(x,y,i,i===activeIdx,i===hoveredIdx);
+  });
+}
+
+function drawGrid(){
+  ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.lineWidth=1;
+  const step=zoomLevel<10?1:zoomLevel<12?.5:.1;
+  const tl=unproject(0,0), br=unproject(W,H);
+  const latStart=Math.floor(br.lat/step)*step, latEnd=Math.ceil(tl.lat/step)*step;
+  const lngStart=Math.floor(tl.lng/step)*step, lngEnd=Math.ceil(br.lng/step)*step;
+  for(let la=latStart;la<=latEnd;la+=step){
+    const {y}=project(la,centerLng);
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.12)';ctx.font='9px monospace';
+    ctx.fillText(la.toFixed(1)+'°',4,y-2);
+  }
+  for(let lo=lngStart;lo<=lngEnd;lo+=step){
+    const {x}=project(centerLat,lo);
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.12)';ctx.font='9px monospace';
+    ctx.fillText(lo.toFixed(1)+'°',x+2,10);
+  }
+  [{name:'RALEIGH',lat:35.779,lng:-78.638},{name:'DURHAM',lat:35.994,lng:-78.899},
+   {name:'CARY',lat:35.791,lng:-78.781},{name:'GARNER',lat:35.707,lng:-78.614},
+   {name:'KNIGHTDALE',lat:35.787,lng:-78.490}].forEach(c=>{
+    const {x,y}=project(c.lat,c.lng);
+    if(x<0||x>W||y<0||y>H) return;
+    ctx.fillStyle='rgba(255,255,255,.15)'; ctx.font='bold 11px monospace';
+    ctx.fillText(c.name,x,y);
+  });
+}
+
+function drawPin(x,y,i,isActive,isHovered){
+  const apt=APTS[i];
+  const emojis=amenities[i];
+  const hasEmojis=emojis&&emojis.length>0;
+  const c=pcolor(apt.price);
+  const r=isActive?16:isHovered?13:hasEmojis?12:10;
+
+  ctx.shadowColor=c; ctx.shadowBlur=isActive?16:isHovered?8:4;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=c; ctx.fill();
+  ctx.shadowBlur=0;
+
+  if(hasEmojis){
+    // Emoji grid inside pin
+    ctx.beginPath(); ctx.arc(x,y,r*.95,0,Math.PI*2);
+    ctx.fillStyle='#0f1117'; ctx.fill();
+
+    const cols=emojis.length<=2?emojis.length:emojis.length<=4?2:3;
+    const rows=Math.ceil(emojis.length/cols);
+    const eSize=Math.min(r*1.1, (r*1.7)/Math.max(cols,rows));
+    const startX=x-(cols-1)*eSize*0.55;
+    const startY=y-(rows-1)*eSize*0.55;
+    ctx.font=`${eSize}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    emojis.forEach((em,ei)=>{
+      const col=ei%cols, row=Math.floor(ei/cols);
+      ctx.fillText(em, startX+col*eSize*1.1, startY+row*eSize*1.1);
+    });
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  } else {
+    // Plain price label
+    ctx.beginPath(); ctx.arc(x,y,r*.58,0,Math.PI*2);
+    ctx.fillStyle='#0f1117'; ctx.fill();
+    if(isActive||isHovered||zoomLevel>=12){
+      const label='$'+(apt.price>=1000?(apt.price/1000).toFixed(1)+'k':apt.price);
+      ctx.font=`bold ${isActive?8:7}px monospace`;
+      ctx.fillStyle=c; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(label,x,y);
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    }
+  }
+}
+
+// ── Hit test ──────────────────────────────────────────────────────────────────
+function hitTest(mx,my){
+  for(let i=APTS.length-1;i>=0;i--){
+    if(activeFilter!=='all'&&tier(APTS[i].price)!==activeFilter) continue;
+    const {x,y}=project(APTS[i].lat,APTS[i].lng);
+    if(Math.hypot(mx-x,my-y)<=( i===activeIdx?16:10)+4) return i;
+  }
+  return -1;
+}
+
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+const tooltip=document.getElementById('tooltip');
+function showTooltip(i,cx,cy){
+  const apt=APTS[i];
+  document.getElementById('tName').textContent='$'+apt.price.toLocaleString()+'/mo · '+apt.name;
+  document.getElementById('tPrice').textContent='';
+  document.getElementById('tLease').textContent=apt.lease+' lease';
+  document.getElementById('tAddr').textContent=apt.addr;
+  document.getElementById('tPrice').style.color=pcolor(apt.price);
+  const em=amenities[i];
+  document.getElementById('tEmojis').textContent=em.length?em.join(' '):'';
+  document.getElementById('tHint').textContent='Click to tag amenities →';
+  tooltip.style.display='block';
+  const tw=tooltip.offsetWidth||220, th=tooltip.offsetHeight||130;
+  let tx=cx+18, ty=cy-th/2;
+  if(tx+tw>W) tx=cx-tw-12;
+  if(ty<4) ty=4;
+  if(ty+th>H) ty=H-th-4;
+  tooltip.style.left=tx+'px'; tooltip.style.top=ty+'px';
+}
+function hideTooltip(){ tooltip.style.display='none'; }
+
 // ── Sidebar ───────────────────────────────────────────────────────────────────
-const listEl = document.getElementById('aptList');
-APTS.forEach((apt, i) => {
-  const div = document.createElement('div');
-  div.className = 'apt-item';
-  div.id = `item-${i}`;
-  div.dataset.tier = tier(apt.price);
-  div.innerHTML = `<div class="apt-name">${apt.name}</div>
+const listEl=document.getElementById('aptList');
+APTS.forEach((apt,i)=>{
+  const div=document.createElement('div');
+  div.className='apt-item'; div.id=`item-${i}`; div.dataset.tier=tier(apt.price);
+  div.innerHTML=`<div class="apt-name">${apt.name}</div>
     <div class="apt-meta">
       <span class="ptag ${tier(apt.price)}">$${apt.price.toLocaleString()}</span>
       <span class="ltag">${apt.lease}</span>
+      <span class="emojis-sb" id="sb-em-${i}"></span>
     </div>`;
-  div.addEventListener('click', () => selectApt(i));
+  div.addEventListener('click',()=>selectApt(i));
   listEl.appendChild(div);
+  updateSidebarEmojis(i);
 });
 
-// ── Select ────────────────────────────────────────────────────────────────────
-function selectApt(i) {
-  // Deactivate old
-  if (activeIdx !== null) {
-    document.getElementById(`item-${activeIdx}`)?.classList.remove('active');
-    document.getElementById(`pin-${activeIdx}`)?.classList.remove('active');
-  }
-  activeIdx = i;
+function updateSidebarEmojis(i){
+  const el=document.getElementById(`sb-em-${i}`);
+  if(el) el.textContent=amenities[i].join('');
+}
+
+function selectApt(i){
+  if(activeIdx!==null) document.getElementById(`item-${activeIdx}`)?.classList.remove('active');
+  activeIdx=i;
   document.getElementById(`item-${i}`)?.classList.add('active');
-  document.getElementById(`item-${i}`)?.scrollIntoView({ block:'nearest', behavior:'smooth' });
-  document.getElementById(`pin-${i}`)?.classList.add('active');
-  map.setView([APTS[i].lat, APTS[i].lng], Math.max(map.getZoom(), 13));
-  showTooltip(i);
+  document.getElementById(`item-${i}`)?.scrollIntoView({block:'nearest',behavior:'smooth'});
+  centerLat=APTS[i].lat; centerLng=APTS[i].lng;
+  if(zoomLevel<12) zoomLevel=13;
+  draw();
+  const {x,y}=project(APTS[i].lat,APTS[i].lng);
+  showTooltip(i,x,y);
+  // Open amenity modal on click
+  openModal(i);
 }
 
 // ── Filter ────────────────────────────────────────────────────────────────────
-function setFilter(f, btn) {
-  activeFilter = f;
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+function setFilter(f,btn){
+  activeFilter=f;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
   btn.classList.add('active');
-  let n = 0;
-  APTS.forEach((apt, i) => {
-    const show = f === 'all' || tier(apt.price) === f;
-    document.getElementById(`item-${i}`).classList.toggle('hidden', !show);
-    const pin = document.getElementById(`pin-${i}`);
-    if (pin) pin.closest('.leaflet-marker-icon').style.display = show ? '' : 'none';
-    if (show) n++;
+  let n=0;
+  APTS.forEach((_,i)=>{
+    const show=f==='all'||tier(APTS[i].price)===f;
+    document.getElementById(`item-${i}`).classList.toggle('hidden',!show);
+    if(show) n++;
   });
-  document.getElementById('count').textContent = n;
-  if (activeIdx !== null && f !== 'all' && tier(APTS[activeIdx].price) !== f) {
+  document.getElementById('count').textContent=n;
+  if(activeIdx!==null&&f!=='all'&&tier(APTS[activeIdx].price)!==f){
     document.getElementById(`item-${activeIdx}`)?.classList.remove('active');
-    document.getElementById(`pin-${activeIdx}`)?.classList.remove('active');
-    activeIdx = null;
-    hideTooltip();
+    activeIdx=null; hideTooltip();
   }
+  draw();
 }
 
-// Click map background to dismiss tooltip
-map.on('click', () => {
-  if (activeIdx !== null) {
-    document.getElementById(`item-${activeIdx}`)?.classList.remove('active');
-    document.getElementById(`pin-${activeIdx}`)?.classList.remove('active');
-    activeIdx = null;
-  }
-  hideTooltip();
+// ── Zoom & Pan ────────────────────────────────────────────────────────────────
+function zoom(delta){ zoomLevel=Math.max(9,Math.min(16,zoomLevel+delta)); draw(); }
+canvas.addEventListener('wheel',e=>{ e.preventDefault(); zoom(e.deltaY<0?1:-1); },{passive:false});
+
+canvas.addEventListener('mousedown',e=>{
+  isPanning=true; panStart={x:e.clientX,y:e.clientY,lat:centerLat,lng:centerLng};
+  canvas.classList.add('panning');
 });
+window.addEventListener('mousemove',e=>{
+  if(!wrap.contains(e.target)&&!isPanning) return;
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  if(isPanning&&panStart){
+    const dx=e.clientX-panStart.x, dy=e.clientY-panStart.y;
+    const scale=TILE*Math.pow(2,zoomLevel);
+    const cw=latLngToWorld(panStart.lat,panStart.lng,zoomLevel);
+    const nwy=cw.y-dy;
+    const n2=Math.PI-2*Math.PI*nwy/scale;
+    centerLat=180/Math.PI*Math.atan(0.5*(Math.exp(n2)-Math.exp(-n2)));
+    centerLng=panStart.lng-(dx/scale)*360;
+    hideTooltip(); draw(); return;
+  }
+  const hit=hitTest(mx,my);
+  if(hit!==-1){ hoveredIdx=hit; canvas.style.cursor='pointer'; showTooltip(hit,mx,my); }
+  else{ hoveredIdx=null; canvas.style.cursor=isPanning?'grabbing':'grab'; if(activeIdx===null) hideTooltip(); }
+  draw();
+});
+window.addEventListener('mouseup',()=>{ isPanning=false; panStart=null; canvas.classList.remove('panning'); });
+canvas.addEventListener('click',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const hit=hitTest(e.clientX-rect.left,e.clientY-rect.top);
+  if(hit!==-1) selectApt(hit);
+  else{ activeIdx=null; hideTooltip(); draw(); }
+});
+
+// ── Amenity Modal ─────────────────────────────────────────────────────────────
+let modalIdx=null;
+let tempSelected=[];
+
+function buildAmenityGrids(){
+  Object.entries(AMENITY_GROUPS).forEach(([group, items])=>{
+    const grid=document.getElementById(`grid-${group}`);
+    if(!grid) return;
+    items.forEach(({e,l})=>{
+      const btn=document.createElement('button');
+      btn.className='amenity-btn';
+      btn.dataset.emoji=e;
+      btn.innerHTML=`<span class="amenity-em">${e}</span><span class="amenity-lbl">${l}</span>`;
+      btn.addEventListener('click',()=>toggleAmenity(e,btn));
+      grid.appendChild(btn);
+    });
+  });
+}
+
+function toggleAmenity(emoji,btn){
+  const idx=tempSelected.indexOf(emoji);
+  if(idx===-1){ tempSelected.push(emoji); btn.classList.add('selected'); }
+  else{ tempSelected.splice(idx,1); btn.classList.remove('selected'); }
+  updateModalPreview();
+}
+
+function updateModalPreview(){
+  const prev=document.getElementById('mPreview');
+  prev.textContent=tempSelected.length?tempSelected.join(' ')+'  ':'—';
+}
+
+function openModal(i){
+  modalIdx=i;
+  const apt=APTS[i];
+  document.getElementById('mTitle').textContent=apt.name;
+  document.getElementById('mSub').textContent='$'+apt.price.toLocaleString()+'/mo · '+apt.lease+' lease';
+  // Load existing
+  tempSelected=[...amenities[i]];
+  // Reset all buttons
+  document.querySelectorAll('.amenity-btn').forEach(btn=>{
+    btn.classList.toggle('selected', tempSelected.includes(btn.dataset.emoji));
+  });
+  updateModalPreview();
+  document.getElementById('amenityModal').classList.add('open');
+}
+
+function closeModal(){
+  document.getElementById('amenityModal').classList.remove('open');
+  modalIdx=null;
+}
+
+function saveAmenities(){
+  if(modalIdx===null) return;
+  amenities[modalIdx]=[...tempSelected];
+  saveEmojis(modalIdx);
+  updateSidebarEmojis(modalIdx);
+  draw();
+  closeModal();
+}
+
+function clearAmenities(){
+  tempSelected=[];
+  document.querySelectorAll('.amenity-btn').forEach(b=>b.classList.remove('selected'));
+  updateModalPreview();
+}
+
+// Close modal on backdrop click
+document.getElementById('amenityModal').addEventListener('click',e=>{
+  if(e.target===document.getElementById('amenityModal')) closeModal();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildAmenityGrids();
+window.addEventListener('resize',resize);
+resize();
 </script>
 </body>
 </html>
