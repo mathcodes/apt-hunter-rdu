@@ -138,65 +138,6 @@ header {
   border-radius:5px; color:var(--muted); font-family:monospace; font-size:11px; cursor:pointer; transition:all .12s;
 }
 .btn-clear:hover { border-color:var(--red); color:var(--red); }
-
-/* ── Add Apt Button ── */
-.btn-add-apt {
-  display:flex; align-items:center; gap:5px;
-  padding:4px 10px; background:var(--accent); border:none; border-radius:4px;
-  color:#fff; font-family:monospace; font-size:11px; font-weight:600;
-  cursor:pointer; transition:opacity .12s; white-space:nowrap;
-}
-.btn-add-apt:hover { opacity:.85; }
-
-/* ── Add Apt Modal ── */
-#addModal {
-  display:none; position:fixed; inset:0; z-index:10001;
-  background:rgba(0,0,0,.75); backdrop-filter:blur(4px);
-  align-items:center; justify-content:center;
-}
-#addModal.open { display:flex; }
-#addModal .modal-box { width:400px; max-width:95vw; }
-
-.add-tabs { display:flex; border-bottom:1px solid var(--border); }
-.add-tab {
-  flex:1; padding:9px; text-align:center; font-family:monospace; font-size:11px;
-  color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;
-  transition:all .12s; background:none; border-top:none; border-left:none; border-right:none;
-}
-.add-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
-
-.add-pane { display:none; padding:14px; }
-.add-pane.active { display:block; }
-
-.add-field { margin-bottom:10px; }
-.add-label { font-size:9px; font-family:monospace; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; margin-bottom:4px; display:block; }
-.add-input {
-  width:100%; padding:7px 9px; background:var(--bg); border:1px solid var(--border);
-  border-radius:5px; color:var(--text); font-size:11px; font-family:monospace;
-  outline:none; transition:border-color .12s;
-}
-.add-input:focus { border-color:var(--accent); }
-.add-input::placeholder { color:var(--muted); }
-.add-row { display:flex; gap:8px; }
-.add-row .add-field { flex:1; }
-
-.parse-btn {
-  width:100%; padding:7px; margin-top:4px; background:rgba(79,142,247,.15);
-  border:1px solid var(--accent); border-radius:5px; color:var(--accent);
-  font-family:monospace; font-size:11px; cursor:pointer; transition:all .12s;
-}
-.parse-btn:hover { background:rgba(79,142,247,.25); }
-.parse-btn:disabled { opacity:.4; cursor:default; }
-
-.parse-status {
-  font-size:10px; font-family:monospace; margin-top:6px; min-height:16px;
-  text-align:center;
-}
-.parse-status.ok  { color:var(--green); }
-.parse-status.err { color:var(--red); }
-.parse-status.loading { color:var(--muted); }
-
-.add-divider { border:none; border-top:1px solid var(--border); margin:10px 0; }
 </style>
 </head>
 <body>
@@ -212,7 +153,6 @@ header {
       <button class="chip c-red"    onclick="setFilter('high',this)">&gt;$1,400</button>
     </div>
     <span class="stat">Showing <strong id="count">27</strong></span>
-    <button class="btn-add-apt" onclick="openAddModal()">+ Add Apt</button>
   </div>
 </header>
 
@@ -346,8 +286,6 @@ function saveEmojis(i) {
 function tier(p)   { return p<1100?'low':p<=1400?'mid':'high'; }
 function pcolor(p) { return p<1100?'#34d399':p<=1400?'#fbbf24':'#f87171'; }
 
-let rafPending = false;
-
 // ── Map math ──────────────────────────────────────────────────────────────────
 const TILE = 256;
 function latLngToWorld(lat,lng,z){
@@ -389,9 +327,11 @@ const TILE_SERVERS = [
   'https://b.tile.openstreetmap.org',
   'https://c.tile.openstreetmap.org',
 ];
+let tileServerIdx = 0;
+
 function getTileUrl(z, x, y) {
-  // Stable server selection per tile (consistent hashing, no counter drift)
-  const base = TILE_SERVERS[(x + y) % TILE_SERVERS.length];
+  const base = TILE_SERVERS[tileServerIdx % TILE_SERVERS.length];
+  tileServerIdx++;
   return `${base}/${z}/${x}/${y}.png`;
 }
 
@@ -401,7 +341,7 @@ function loadTile(z, tx, ty) {
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.src = getTileUrl(z, tx, ty);
-  img.onload  = () => { tileCache[key] = img; if(!rafPending){ rafPending=true; requestAnimationFrame(()=>{ draw(); rafPending=false; }); } };
+  img.onload  = () => { tileCache[key] = img; draw(); };
   img.onerror = () => { tileCache[key] = 'err'; };
   tileCache[key] = null; // loading
   return null;
@@ -478,46 +418,32 @@ function drawPin(x,y,i,isActive,isHovered){
   const emojis=amenities[i];
   const hasEmojis=emojis&&emojis.length>0;
   const c=pcolor(apt.price);
+  const r=isActive?16:isHovered?13:hasEmojis?12:10;
+
+  ctx.shadowColor=c; ctx.shadowBlur=isActive?16:isHovered?8:4;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=c; ctx.fill();
+  ctx.shadowBlur=0;
 
   if(hasEmojis){
-    const n=emojis.length;
-    const cols=n<=2?n:n<=4?2:3;
-    const rows=Math.ceil(n/cols);
-
-    // Emoji size: start at 18px, shrink 1.5px per emoji beyond 4, floor at 9px (half of 18)
-    const BASE_EMOJI=18, MIN_EMOJI=9;
-    const eSize=Math.max(MIN_EMOJI, BASE_EMOJI-(n>4?(n-4)*1.5:0));
-    const pad=2;
-    const gridW=cols*eSize+(cols-1)*pad;
-    const gridH=rows*eSize+(rows-1)*pad;
-
-    // Pin expands to contain the grid — never smaller than base radius
-    const baseR=isActive?16:isHovered?13:10;
-    const r=Math.max(baseR, Math.ceil(Math.sqrt((gridW/2)**2+(gridH/2)**2))+5);
-
-    ctx.shadowColor=c; ctx.shadowBlur=isActive?16:isHovered?8:4;
-    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.fillStyle=c; ctx.fill();
-    ctx.shadowBlur=0;
-
-    ctx.beginPath(); ctx.arc(x,y,r-2,0,Math.PI*2);
+    // Emoji grid inside pin
+    ctx.beginPath(); ctx.arc(x,y,r*.95,0,Math.PI*2);
     ctx.fillStyle='#0f1117'; ctx.fill();
 
+    const cols=emojis.length<=2?emojis.length:emojis.length<=4?2:3;
+    const rows=Math.ceil(emojis.length/cols);
+    const eSize=Math.min(r*1.1, (r*1.7)/Math.max(cols,rows));
+    const startX=x-(cols-1)*eSize*0.55;
+    const startY=y-(rows-1)*eSize*0.55;
     ctx.font=`${eSize}px serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    const startX=x-(gridW/2)+(eSize/2);
-    const startY=y-(gridH/2)+(eSize/2);
     emojis.forEach((em,ei)=>{
       const col=ei%cols, row=Math.floor(ei/cols);
-      ctx.fillText(em, startX+col*(eSize+pad), startY+row*(eSize+pad));
+      ctx.fillText(em, startX+col*eSize*1.1, startY+row*eSize*1.1);
     });
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   } else {
-    const r=isActive?16:isHovered?13:10;
-    ctx.shadowColor=c; ctx.shadowBlur=isActive?16:isHovered?8:4;
-    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.fillStyle=c; ctx.fill();
-    ctx.shadowBlur=0;
+    // Plain price label
     ctx.beginPath(); ctx.arc(x,y,r*.58,0,Math.PI*2);
     ctx.fillStyle='#0f1117'; ctx.fill();
     if(isActive||isHovered||zoomLevel>=12){
@@ -564,12 +490,10 @@ function hideTooltip(){ tooltip.style.display='none'; }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 const listEl=document.getElementById('aptList');
-
-function addAptToSidebar(i, isNew){
-  const apt=APTS[i];
+APTS.forEach((apt,i)=>{
   const div=document.createElement('div');
   div.className='apt-item'; div.id=`item-${i}`; div.dataset.tier=tier(apt.price);
-  div.innerHTML=`<div class="apt-name">${apt.name}${isNew?' <span style="color:var(--accent);font-size:9px;font-family:monospace">NEW</span>':''}</div>
+  div.innerHTML=`<div class="apt-name">${apt.name}</div>
     <div class="apt-meta">
       <span class="ptag ${tier(apt.price)}">$${apt.price.toLocaleString()}</span>
       <span class="ltag">${apt.lease}</span>
@@ -578,9 +502,7 @@ function addAptToSidebar(i, isNew){
   div.addEventListener('click',()=>selectApt(i));
   listEl.appendChild(div);
   updateSidebarEmojis(i);
-}
-
-// Sidebar built inside initApp() after custom apts are loaded
+});
 
 function updateSidebarEmojis(i){
   const el=document.getElementById(`sb-em-${i}`);
@@ -640,14 +562,12 @@ window.addEventListener('mousemove',e=>{
     const n2=Math.PI-2*Math.PI*nwy/scale;
     centerLat=180/Math.PI*Math.atan(0.5*(Math.exp(n2)-Math.exp(-n2)));
     centerLng=panStart.lng-(dx/scale)*360;
-    hideTooltip();
-    if(!rafPending){ rafPending=true; requestAnimationFrame(()=>{ draw(); rafPending=false; }); }
-    return;
+    hideTooltip(); draw(); return;
   }
   const hit=hitTest(mx,my);
   if(hit!==-1){ hoveredIdx=hit; canvas.style.cursor='pointer'; showTooltip(hit,mx,my); }
   else{ hoveredIdx=null; canvas.style.cursor=isPanning?'grabbing':'grab'; if(activeIdx===null) hideTooltip(); }
-  if(!rafPending){ rafPending=true; requestAnimationFrame(()=>{ draw(); rafPending=false; }); }
+  draw();
 });
 window.addEventListener('mouseup',()=>{ isPanning=false; panStart=null; canvas.classList.remove('panning'); });
 canvas.addEventListener('click',e=>{
@@ -728,282 +648,10 @@ document.getElementById('amenityModal').addEventListener('click',e=>{
   if(e.target===document.getElementById('amenityModal')) closeModal();
 });
 
-
-// ── Add Apartment Modal ───────────────────────────────────────────────────────
-
-// Custom apts loaded at init time (see initApp below)
-
-function saveCustomApts(){
-  // Save only the apts beyond the original 27
-  try {
-    const custom = APTS.slice(27);
-    localStorage.setItem('custom_apts', JSON.stringify(custom));
-  } catch(e){}
-}
-
-const FIELD_DEFS = [
-  {id:'f-name',  label:'Apartment Name',     placeholder:'The Reserve at...',       type:'text'},
-  {id:'f-price', label:'Monthly Rent ($)',    placeholder:'1350',                    type:'number'},
-  {id:'f-lease', label:'Lease Term',          placeholder:'12-mo',                   type:'text'},
-  {id:'f-addr',  label:'Full Address',        placeholder:'123 Main St, Raleigh, NC',type:'text'},
-];
-
-function buildFields(containerId){
-  const c = document.getElementById(containerId);
-  c.innerHTML = '';
-  FIELD_DEFS.forEach(f => {
-    c.innerHTML += `<div class="add-field">
-      <label class="add-label" for="${containerId}-${f.id}">${f.label}</label>
-      <input class="add-input" id="${containerId}-${f.id}" type="${f.type}" placeholder="${f.placeholder}" />
-    </div>`;
-  });
-}
-
-function getFieldVals(containerId){
-  const vals = {};
-  FIELD_DEFS.forEach(f => {
-    vals[f.id] = document.getElementById(`${containerId}-${f.id}`)?.value?.trim() || '';
-  });
-  return vals;
-}
-
-function setFieldVals(containerId, vals){
-  FIELD_DEFS.forEach(f => {
-    const el = document.getElementById(`${containerId}-${f.id}`);
-    if(el && vals[f.id] !== undefined) el.value = vals[f.id];
-  });
-}
-
-let addTab = 'url';
-
-function openAddModal(){
-  buildFields('urlFields');
-  buildFields('manualFields');
-  document.getElementById('urlInput').value = '';
-  document.getElementById('parseStatus').textContent = '';
-  document.getElementById('parseStatus').className = 'parse-status';
-  document.getElementById('parsedDivider').style.display = 'none';
-  document.getElementById('parsedPreview').style.display = 'none';
-  switchTab('url');
-  document.getElementById('addModal').classList.add('open');
-}
-
-function closeAddModal(){
-  document.getElementById('addModal').classList.remove('open');
-}
-
-function switchTab(tab){
-  addTab = tab;
-  document.querySelectorAll('.add-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.add-pane').forEach(p => p.classList.remove('active'));
-  document.getElementById(`tab-${tab}`).classList.add('active');
-  document.getElementById(`pane-${tab}`).classList.add('active');
-}
-
-async function parseUrl(){
-  const url = document.getElementById('urlInput').value.trim();
-  if(!url){ setParseStatus('Enter a URL first', 'err'); return; }
-
-  const btn = document.getElementById('parseBtn');
-  btn.disabled = true;
-  setParseStatus('Parsing listing...', 'loading');
-
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: `You are a data extraction assistant. The user will provide a URL to an apartment listing. 
-Extract the following fields and return ONLY valid JSON with no markdown or explanation:
-{
-  "name": "apartment complex name",
-  "price": 1234,
-  "lease": "12-mo",
-  "addr": "full street address including city, state, zip"
-}
-If a field cannot be determined, use null. Price should be a number (monthly rent). 
-Lease should be formatted like "12-mo", "6-mo", "14-mo" etc.
-The URL may be from Apartments.com, Zillow, Trulia, Rent.com, or similar sites.
-Extract whatever info is visible from the URL path and domain — make reasonable inferences from the URL structure if the page itself cannot be fetched.`,
-        messages: [{ role: 'user', content: `Extract apartment info from this listing URL: ${url}` }]
-      })
-    });
-
-    const data = await response.json();
-    const text = data.content?.find(b => b.type === 'text')?.text || '';
-    const clean = text.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
-
-    if(!parsed.name && !parsed.addr){
-      throw new Error('Could not extract apartment details');
-    }
-
-    // Fill fields with parsed data
-    setFieldVals('urlFields', {
-      'f-name':  parsed.name  || '',
-      'f-price': parsed.price || '',
-      'f-lease': parsed.lease || '12-mo',
-      'f-addr':  parsed.addr  || '',
-    });
-
-    document.getElementById('parsedDivider').style.display = 'block';
-    document.getElementById('parsedPreview').style.display = 'block';
-    setParseStatus('✓ Parsed — review and confirm below', 'ok');
-
-  } catch(err) {
-    setParseStatus('Could not auto-parse — fill in manually below', 'err');
-    document.getElementById('parsedDivider').style.display = 'block';
-    document.getElementById('parsedPreview').style.display = 'block';
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-function setParseStatus(msg, cls){
-  const el = document.getElementById('parseStatus');
-  el.textContent = msg;
-  el.className = 'parse-status ' + (cls || '');
-}
-
-async function geocodeAddress(addr){
-  try {
-    const q = encodeURIComponent(addr);
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1`, {
-      headers: { 'User-Agent': 'AptHunterRDU/1.0' }
-    });
-    const data = await res.json();
-    if(data && data[0]){
-      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-    }
-  } catch(e){}
-  return null;
-}
-
-async function submitNewApt(){
-  const src = addTab === 'url' ? 'urlFields' : 'manualFields';
-  const vals = getFieldVals(src);
-
-  if(!vals['f-name']) { alert('Please enter an apartment name.'); return; }
-  if(!vals['f-addr']) { alert('Please enter an address so we can place it on the map.'); return; }
-
-  const price = parseInt(vals['f-price']) || 0;
-  const lease = vals['f-lease'] || '12-mo';
-
-  // Show geocoding state
-  const saveBtn = document.querySelector('#addModal .btn-save');
-  saveBtn.textContent = 'Locating...';
-  saveBtn.disabled = true;
-
-  let coords = await geocodeAddress(vals['f-addr']);
-
-  // Fallback: center of RDU area
-  if(!coords){ coords = { lat: 35.83 + (Math.random()-.5)*.05, lng: -78.68 + (Math.random()-.5)*.05 }; }
-
-  const newApt = {
-    name:  vals['f-name'],
-    price: price,
-    lease: lease,
-    lat:   coords.lat,
-    lng:   coords.lng,
-    addr:  vals['f-addr'],
-    custom: true,
-  };
-
-  APTS.push(newApt);
-  amenities.push([]);
-  saveCustomApts();
-
-  const i = APTS.length - 1;
-
-  // Add sidebar item
-  addAptToSidebar(i, true);
-
-  // Update count + All chip
-  document.getElementById('count').textContent = APTS.length;
-  document.querySelectorAll('.chip')[0].textContent = `All ${APTS.length}`;
-
-  saveBtn.textContent = 'Add to map';
-  saveBtn.disabled = false;
-
-  closeAddModal();
-
-  // Pan to and select new apt
-  selectApt(i);
-}
-
-document.getElementById('addModal').addEventListener('click', e => {
-  if(e.target === document.getElementById('addModal')) closeAddModal();
-});
-
 // ── Init ──────────────────────────────────────────────────────────────────────
-function initApp(){
-  // Load custom apts BEFORE sidebar is built
-  try {
-    const saved = JSON.parse(localStorage.getItem('custom_apts') || '[]');
-    saved.forEach(apt => {
-      APTS.push(apt);
-      amenities.push([]);
-    });
-  } catch(e){}
-
-  // Build sidebar for ALL apts (built-ins + custom loaded above)
-  APTS.forEach((_,i) => addAptToSidebar(i, false));
-
-  buildAmenityGrids();
-  window.addEventListener('resize', resize);
-  resize();
-  // Sync count chip
-  document.querySelectorAll('.chip')[0].textContent = `All ${APTS.length}`;
-  document.getElementById('count').textContent = APTS.length;
-}
-initApp();
+buildAmenityGrids();
+window.addEventListener('resize',resize);
+resize();
 </script>
-
-<!-- Add Apartment Modal -->
-<div id="addModal">
-  <div class="modal-box">
-    <div class="modal-head">
-      <div>
-        <div class="modal-title">Add Apartment</div>
-        <div class="modal-sub">Paste a listing URL or enter details manually</div>
-      </div>
-      <button class="modal-close" onclick="closeAddModal()">✕</button>
-    </div>
-
-    <div class="add-tabs">
-      <button class="add-tab active" id="tab-url"    onclick="switchTab('url')">🔗 Paste URL</button>
-      <button class="add-tab"        id="tab-manual" onclick="switchTab('manual')">✏️ Manual Entry</button>
-    </div>
-
-    <!-- URL pane -->
-    <div class="add-pane active" id="pane-url">
-      <div class="add-field">
-        <label class="add-label">Listing URL (Apartments.com, Zillow, etc.)</label>
-        <input class="add-input" id="urlInput" type="url" placeholder="https://www.apartments.com/..." />
-      </div>
-      <button class="parse-btn" id="parseBtn" onclick="parseUrl()">Parse listing →</button>
-      <div class="parse-status" id="parseStatus"></div>
-      <hr class="add-divider" id="parsedDivider" style="display:none">
-      <div id="parsedPreview" style="display:none">
-        <div class="add-label" style="margin-bottom:8px">Parsed — edit if needed:</div>
-      </div>
-      <!-- Shared fields injected here by JS -->
-      <div id="urlFields"></div>
-    </div>
-
-    <!-- Manual pane -->
-    <div class="add-pane" id="pane-manual">
-      <div id="manualFields"></div>
-    </div>
-
-    <div class="modal-foot">
-      <button class="btn-clear" onclick="closeAddModal()">Cancel</button>
-      <button class="btn-save"  onclick="submitNewApt()">Add to map</button>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>
