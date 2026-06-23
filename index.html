@@ -387,11 +387,9 @@ const TILE_SERVERS = [
   'https://b.tile.openstreetmap.org',
   'https://c.tile.openstreetmap.org',
 ];
-let tileServerIdx = 0;
-
 function getTileUrl(z, x, y) {
-  const base = TILE_SERVERS[tileServerIdx % TILE_SERVERS.length];
-  tileServerIdx++;
+  // Stable server selection per tile (consistent hashing, no counter drift)
+  const base = TILE_SERVERS[(x + y) % TILE_SERVERS.length];
   return `${base}/${z}/${x}/${y}.png`;
 }
 
@@ -564,10 +562,12 @@ function hideTooltip(){ tooltip.style.display='none'; }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 const listEl=document.getElementById('aptList');
-APTS.forEach((apt,i)=>{
+
+function addAptToSidebar(i, isNew){
+  const apt=APTS[i];
   const div=document.createElement('div');
   div.className='apt-item'; div.id=`item-${i}`; div.dataset.tier=tier(apt.price);
-  div.innerHTML=`<div class="apt-name">${apt.name}</div>
+  div.innerHTML=`<div class="apt-name">${apt.name}${isNew?' <span style="color:var(--accent);font-size:9px;font-family:monospace">NEW</span>':''}</div>
     <div class="apt-meta">
       <span class="ptag ${tier(apt.price)}">$${apt.price.toLocaleString()}</span>
       <span class="ltag">${apt.lease}</span>
@@ -576,7 +576,10 @@ APTS.forEach((apt,i)=>{
   div.addEventListener('click',()=>selectApt(i));
   listEl.appendChild(div);
   updateSidebarEmojis(i);
-});
+}
+
+// Build sidebar for all current APTS (built-in + custom already pushed)
+APTS.forEach((_,i) => addAptToSidebar(i, false));
 
 function updateSidebarEmojis(i){
   const el=document.getElementById(`sb-em-${i}`);
@@ -624,6 +627,7 @@ canvas.addEventListener('mousedown',e=>{
   isPanning=true; panStart={x:e.clientX,y:e.clientY,lat:centerLat,lng:centerLng};
   canvas.classList.add('panning');
 });
+let rafPending=false;
 window.addEventListener('mousemove',e=>{
   if(!wrap.contains(e.target)&&!isPanning) return;
   const rect=canvas.getBoundingClientRect();
@@ -636,12 +640,14 @@ window.addEventListener('mousemove',e=>{
     const n2=Math.PI-2*Math.PI*nwy/scale;
     centerLat=180/Math.PI*Math.atan(0.5*(Math.exp(n2)-Math.exp(-n2)));
     centerLng=panStart.lng-(dx/scale)*360;
-    hideTooltip(); draw(); return;
+    hideTooltip();
+    if(!rafPending){ rafPending=true; requestAnimationFrame(()=>{ draw(); rafPending=false; }); }
+    return;
   }
   const hit=hitTest(mx,my);
   if(hit!==-1){ hoveredIdx=hit; canvas.style.cursor='pointer'; showTooltip(hit,mx,my); }
   else{ hoveredIdx=null; canvas.style.cursor=isPanning?'grabbing':'grab'; if(activeIdx===null) hideTooltip(); }
-  draw();
+  if(!rafPending){ rafPending=true; requestAnimationFrame(()=>{ draw(); rafPending=false; }); }
 });
 window.addEventListener('mouseup',()=>{ isPanning=false; panStart=null; canvas.classList.remove('panning'); });
 canvas.addEventListener('click',e=>{
@@ -725,16 +731,7 @@ document.getElementById('amenityModal').addEventListener('click',e=>{
 
 // ── Add Apartment Modal ───────────────────────────────────────────────────────
 
-// Load custom apts from localStorage on startup
-(function loadCustomApts(){
-  try {
-    const saved = JSON.parse(localStorage.getItem('custom_apts') || '[]');
-    saved.forEach(apt => {
-      APTS.push(apt);
-      amenities.push([]);
-    });
-  } catch(e){}
-})();
+// Custom apts loaded at init time (see initApp below)
 
 function saveCustomApts(){
   // Save only the apts beyond the original 27
@@ -921,26 +918,11 @@ async function submitNewApt(){
   const i = APTS.length - 1;
 
   // Add sidebar item
-  const div = document.createElement('div');
-  div.className = 'apt-item';
-  div.id = `item-${i}`;
-  div.dataset.tier = tier(newApt.price);
-  div.innerHTML = `<div class="apt-name">${newApt.name} <span style="color:var(--accent);font-size:9px;font-family:monospace">NEW</span></div>
-    <div class="apt-meta">
-      <span class="ptag ${tier(newApt.price)}">$${newApt.price.toLocaleString()}</span>
-      <span class="ltag">${newApt.lease}</span>
-      <span class="emojis-sb" id="sb-em-${i}"></span>
-    </div>`;
-  div.addEventListener('click', () => selectApt(i));
-  document.getElementById('aptList').appendChild(div);
+  addAptToSidebar(i, true);
 
-  // Update count chip
-  const countEl = document.getElementById('count');
-  const cur = parseInt(countEl.textContent) || 0;
-  countEl.textContent = cur + 1;
-  // Update "All" chip label
-  document.querySelector('.chip.active')?.textContent.includes('All') &&
-    (document.querySelectorAll('.chip')[0].textContent = `All ${APTS.length}`);
+  // Update count + All chip
+  document.getElementById('count').textContent = APTS.length;
+  document.querySelectorAll('.chip')[0].textContent = `All ${APTS.length}`;
 
   saveBtn.textContent = 'Add to map';
   saveBtn.disabled = false;
@@ -956,9 +938,24 @@ document.getElementById('addModal').addEventListener('click', e => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-buildAmenityGrids();
-window.addEventListener('resize',resize);
-resize();
+function initApp(){
+  // Load custom apts BEFORE sidebar is built
+  try {
+    const saved = JSON.parse(localStorage.getItem('custom_apts') || '[]');
+    saved.forEach(apt => {
+      APTS.push(apt);
+      amenities.push([]);
+    });
+  } catch(e){}
+
+  buildAmenityGrids();
+  window.addEventListener('resize', resize);
+  resize();
+  // Sync count chip
+  document.querySelectorAll('.chip')[0].textContent = `All ${APTS.length}`;
+  document.getElementById('count').textContent = APTS.length;
+}
+initApp();
 </script>
 
 <!-- Add Apartment Modal -->
