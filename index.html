@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apt Hunter – Raleigh/Durham</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #0f1117;
+  --surface: #181c27;
+  --border:  #252a38;
+  --text:    #e2e6f0;
+  --muted:   #6b7280;
+  --accent:  #4f8ef7;
+  --green:   #34d399;
+  --yellow:  #fbbf24;
+  --red:     #f87171;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
+
+header {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 8px;
+  position: relative;
+  z-index: 9999;
+}
+.logo { font-family: monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; color: var(--accent); }
+.logo span { color: var(--muted); font-weight: 400; }
+
+.controls { display: flex; align-items: center; gap: 8px; }
+.filter-label { font-size: 10px; font-family: monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.chips { display: flex; gap: 4px; }
+.chip {
+  font-family: monospace; font-size: 10px; padding: 3px 8px;
+  border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); cursor: pointer; transition: all 0.12s;
+}
+.chip:hover { border-color: var(--accent); color: var(--text); }
+.chip.active          { background: var(--accent);  border-color: var(--accent);  color: #fff; }
+.chip.c-green.active  { background: var(--green);   border-color: var(--green);   color: #0f1117; }
+.chip.c-yellow.active { background: var(--yellow);  border-color: var(--yellow);  color: #0f1117; }
+.chip.c-red.active    { background: var(--red);     border-color: var(--red);     color: #0f1117; }
+.stat { font-family: monospace; font-size: 10px; color: var(--muted); }
+.stat strong { color: var(--text); }
+
+.layout { display: flex; height: calc(100vh - 50px); }
+
+/* Sidebar */
+.sidebar {
+  width: 270px; min-width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.sb-hdr {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  font-family: monospace; font-size: 9px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  display: flex; justify-content: space-between;
+}
+.apt-list { overflow-y: auto; flex: 1; }
+.apt-list::-webkit-scrollbar { width: 3px; }
+.apt-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.apt-item {
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.1s;
+  border-left: 2px solid transparent;
+}
+.apt-item:hover   { background: rgba(79,142,247,0.07); }
+.apt-item.active  { background: rgba(79,142,247,0.13); border-left-color: var(--accent); }
+.apt-item.hidden  { display: none; }
+
+.apt-name { font-size: 11px; font-weight: 500; color: var(--text); margin-bottom: 2px; line-height: 1.3; }
+.apt-meta { display: flex; gap: 6px; align-items: center; }
+.ptag { font-family: monospace; font-size: 11px; font-weight: 700; }
+.ptag.low    { color: var(--green); }
+.ptag.mid    { color: var(--yellow); }
+.ptag.high   { color: var(--red); }
+.ltag { font-family: monospace; font-size: 9px; color: var(--muted); }
+
+/* Map canvas area */
+.map-wrap { flex: 1; position: relative; overflow: hidden; background: #1a1f2e; }
+#mapCanvas { position: absolute; top: 0; left: 0; cursor: grab; }
+#mapCanvas.panning { cursor: grabbing; }
+
+/* Tooltip */
+#tooltip {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 11px;
+  min-width: 180px;
+  max-width: 240px;
+  pointer-events: none;
+  display: none;
+  z-index: 100;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+  line-height: 1.5;
+}
+#tooltip .t-name  { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+#tooltip .t-price { font-family: monospace; font-size: 14px; font-weight: 700; }
+#tooltip .t-lease { font-family: monospace; font-size: 9px; color: var(--muted); margin-bottom: 5px; }
+#tooltip .t-addr  { font-size: 10px; color: #9ca3af; }
+#tooltip .t-link  { display: inline-block; margin-top: 6px; font-family: monospace; font-size: 10px; color: var(--accent); text-decoration: none; pointer-events: all; }
+
+/* Zoom controls */
+.zoom-ctrl {
+  position: absolute; top: 12px; right: 12px;
+  display: flex; flex-direction: column; gap: 2px; z-index: 50;
+}
+.zbtn {
+  width: 28px; height: 28px; background: var(--surface);
+  border: 1px solid var(--border); color: var(--text);
+  font-size: 16px; cursor: pointer; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.1s;
+}
+.zbtn:hover { background: var(--border); }
+
+/* Legend */
+.legend {
+  position: absolute; bottom: 14px; right: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 12px; z-index: 50;
+  font-family: monospace; font-size: 10px;
+}
+.legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.legend-row:last-child { margin-bottom: 0; }
+.ldot { width: 10px; height: 10px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">APT HUNTER <span>// RDU</span></div>
+  <div class="controls">
+    <span class="filter-label">Price:</span>
+    <div class="chips">
+      <button class="chip active"    onclick="setFilter('all',this)">All 27</button>
+      <button class="chip c-green"   onclick="setFilter('low',this)">&lt;$1,100</button>
+      <button class="chip c-yellow"  onclick="setFilter('mid',this)">$1,100–$1,400</button>
+      <button class="chip c-red"     onclick="setFilter('high',this)">&gt;$1,400</button>
+    </div>
+    <span class="stat">Showing <strong id="count">27</strong></span>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sb-hdr"><span>Apartment</span><span>Price</span></div>
+    <div class="apt-list" id="aptList"></div>
+  </div>
+  <div class="map-wrap" id="mapWrap">
+    <canvas id="mapCanvas"></canvas>
+    <div class="zoom-ctrl">
+      <button class="zbtn" onclick="zoom(1)">+</button>
+      <button class="zbtn" onclick="zoom(-1)">−</button>
+    </div>
+    <div class="legend">
+      <div class="legend-row"><div class="ldot" style="background:#34d399"></div> Under $1,100</div>
+      <div class="legend-row"><div class="ldot" style="background:#fbbf24"></div> $1,100–$1,400</div>
+      <div class="legend-row"><div class="ldot" style="background:#f87171"></div> Over $1,400</div>
+    </div>
+    <div id="tooltip">
+      <div class="t-name" id="tName"></div>
+      <div class="t-price" id="tPrice"></div>
+      <div class="t-lease" id="tLease"></div>
+      <div class="t-addr" id="tAddr"></div>
+      <a class="t-link" id="tLink" target="_blank">→ Open in Google Maps</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const APTS = [
+  { name:"Lofts at Lakeview",               price:1595, lease:"6-mo",  lat:36.0091, lng:-78.9463, addr:"2616 Erwin Rd, Durham, NC 27705" },
+  { name:"Taryn at 401",                    price:1481, lease:"12-mo", lat:35.6762, lng:-78.6862, addr:"310 Taryn Ave, Raleigh, NC 27603" },
+  { name:"Abberly Royal Creek",             price:1392, lease:"12-mo", lat:35.6691, lng:-78.7044, addr:"15101 Royal Crk Dr, Raleigh, NC 27603" },
+  { name:"Harrison Grande",                 price:1211, lease:"14-mo", lat:35.8040, lng:-78.7850, addr:"300 Sudbury Dr, Cary, NC 27513" },
+  { name:"Link Apts Glenwood South",        price:1399, lease:"12-mo", lat:35.7831, lng:-78.6453, addr:"202 N West St, Raleigh, NC 27603" },
+  { name:"The Residences at Glenwood Pl",   price:1683, lease:"14-mo", lat:35.8327, lng:-78.6659, addr:"3711 Exchange Glenwood Pl, Raleigh, NC 27612" },
+  { name:"Cortland Midtown East",           price:1413, lease:"12-mo", lat:35.8165, lng:-78.6104, addr:"2601 Noblewood Cir, Raleigh, NC 27604" },
+  { name:"Greystone at Widewaters",         price:1167, lease:"12-mo", lat:35.7939, lng:-78.5048, addr:"1001 Greystone Common Dr, Knightdale, NC 27545" },
+  { name:"Garrett West",                    price:1240, lease:"12-mo", lat:35.9643, lng:-78.9777, addr:"4130 Garrett Rd, Durham, NC 27707" },
+  { name:"Whetstone Apartments",            price:1324, lease:"12-mo", lat:35.9952, lng:-78.9073, addr:"501 Willard St, Durham, NC 27701" },
+  { name:"Andover at Crabtree",             price:1128, lease:"12-mo", lat:35.8636, lng:-78.7021, addr:"6200 Riese Dr, Raleigh, NC 27613" },
+  { name:"Shellbrook",                      price:1385, lease:"6-mo",  lat:35.8589, lng:-78.6510, addr:"910 Shellbrook Court, Raleigh, NC 27609" },
+  { name:"Flats on 7th",                    price:999,  lease:"12-mo", lat:35.7065, lng:-78.6244, addr:"917 7th Ave, Garner, NC 27529" },
+  { name:"Millbrook",                       price:1064, lease:"12-mo", lat:35.8585, lng:-78.6681, addr:"2121 Paces Forest Ct, Raleigh, NC 27612" },
+  { name:"Aria North Hills",                price:965,  lease:"12-mo", lat:35.8742, lng:-78.6400, addr:"6820 Woodbend Dr, Raleigh, NC 27615" },
+  { name:"Arbor Creek Apartment Homes",     price:1065, lease:"12-mo", lat:35.7804, lng:-78.7299, addr:"5400 Portree Pl, Raleigh, NC 27606" },
+  { name:"Averelle North Hills",            price:1085, lease:"12-mo", lat:35.8661, lng:-78.6414, addr:"120 Ridgewood Dr, Raleigh, NC 27609" },
+  { name:"Skyhouse Raleigh",                price:1485, lease:"12-mo", lat:35.7767, lng:-78.6371, addr:"308 S Blount St, Raleigh, NC 27601" },
+  { name:"Wesley",                          price:1351, lease:"12-mo", lat:35.7800, lng:-78.7422, addr:"442 Jefferson Town Rd, Raleigh, NC 27606" },
+  { name:"Creekside at Crabtree",           price:1555, lease:"13-mo", lat:35.8391, lng:-78.6827, addr:"4700 Riverwood Cir, Raleigh, NC 27612" },
+  { name:"Camellia",                        price:1391, lease:"12-mo", lat:35.9054, lng:-78.7012, addr:"12203 Strickland Rd, Raleigh, NC 27613" },
+  { name:"Cedar Springs Apartments",        price:1099, lease:"12-mo", lat:35.8592, lng:-78.5998, addr:"5500 Reunion Point, Raleigh, NC 27609" },
+  { name:"The Falstaff",                    price:1319, lease:"6-mo",  lat:35.7813, lng:-78.5884, addr:"101 Poe Dr, Raleigh, NC 27610" },
+  { name:"University Ridge Apartments",     price:948,  lease:"3-mo",  lat:35.9658, lng:-78.9489, addr:"3611 University Dr, Durham, NC 27707" },
+  { name:"Regatta at Lake Lynn",            price:1195, lease:"12-mo", lat:35.8741, lng:-78.6915, addr:"3000 Inland Trail, Raleigh, NC 27613" },
+  { name:"Marshall Park Apts & Townhomes",  price:1452, lease:"11-mo", lat:35.8325, lng:-78.6792, addr:"3950 Fairsted Dr, Raleigh, NC 27612" },
+  { name:"The Ashton Apartments",           price:1292, lease:"12-mo", lat:35.8767, lng:-78.7306, addr:"8224 Green Lantern St, Raleigh, NC 27613" },
+];
+
+function tier(p)  { return p < 1100 ? 'low' : p <= 1400 ? 'mid' : 'high'; }
+function pcolor(p){ return p < 1100 ? '#34d399' : p <= 1400 ? '#fbbf24' : '#f87171'; }
+
+// ── Map math (Web Mercator projection) ────────────────────────────────────────
+const TILE = 256;
+function latLngToWorld(lat, lng, z) {
+  const scale = TILE * Math.pow(2, z);
+  const x = (lng + 180) / 360 * scale;
+  const sinLat = Math.sin(lat * Math.PI / 180);
+  const y = (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale;
+  return { x, y };
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('mapCanvas');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('mapWrap');
+
+let W, H;
+let zoomLevel = 11;
+// Center on Raleigh
+let centerLat = 35.830, centerLng = -78.680;
+let activeFilter = 'all';
+let activeIdx = null;
+let hoveredIdx = null;
+
+// Pan state
+let isPanning = false;
+let panStart  = null;
+
+// ── Resize ────────────────────────────────────────────────────────────────────
+function resize() {
+  W = wrap.clientWidth;
+  H = wrap.clientHeight;
+  canvas.width  = W;
+  canvas.height = H;
+  draw();
+}
+
+// ── Project lat/lng to canvas px ─────────────────────────────────────────────
+function project(lat, lng) {
+  const center = latLngToWorld(centerLat, centerLng, zoomLevel);
+  const pt     = latLngToWorld(lat, lng, zoomLevel);
+  return {
+    x: W / 2 + (pt.x - center.x),
+    y: H / 2 + (pt.y - center.y),
+  };
+}
+
+function unproject(cx, cy) {
+  const scale = TILE * Math.pow(2, zoomLevel);
+  const center = latLngToWorld(centerLat, centerLng, zoomLevel);
+  const wx = center.x + (cx - W / 2);
+  const wy = center.y + (cy - H / 2);
+  const lng = wx / scale * 360 - 180;
+  const n   = Math.PI - 2 * Math.PI * wy / scale;
+  const lat = 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  return { lat, lng };
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = '#1a1f2e';
+  ctx.fillRect(0, 0, W, H);
+
+  // Simple grid lines to suggest a map
+  drawGrid();
+
+  // Pins
+  APTS.forEach((apt, i) => {
+    if (activeFilter !== 'all' && tier(apt.price) !== activeFilter) return;
+    const { x, y } = project(apt.lat, apt.lng);
+    if (x < -20 || x > W + 20 || y < -20 || y > H + 20) return;
+    drawPin(x, y, apt.price, i === activeIdx, i === hoveredIdx);
+  });
+}
+
+function drawGrid() {
+  // lat/lng grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+
+  const step = zoomLevel < 10 ? 1 : zoomLevel < 12 ? 0.5 : 0.1;
+  const tl = unproject(0, 0);
+  const br = unproject(W, H);
+
+  const latStart = Math.floor(br.lat / step) * step;
+  const latEnd   = Math.ceil(tl.lat / step)  * step;
+  const lngStart = Math.floor(tl.lng / step) * step;
+  const lngEnd   = Math.ceil(br.lng / step)  * step;
+
+  for (let la = latStart; la <= latEnd; la += step) {
+    const { y } = project(la, centerLng);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = '9px monospace';
+    ctx.fillText(la.toFixed(1) + '°', 4, y - 2);
+  }
+  for (let lo = lngStart; lo <= lngEnd; lo += step) {
+    const { x } = project(centerLat, lo);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = '9px monospace';
+    ctx.fillText(lo.toFixed(1) + '°', x + 2, 10);
+  }
+
+  // City label
+  const cities = [
+    { name: 'RALEIGH',  lat: 35.779, lng: -78.638 },
+    { name: 'DURHAM',   lat: 35.994, lng: -78.899 },
+    { name: 'CARY',     lat: 35.791, lng: -78.781 },
+    { name: 'GARNER',   lat: 35.707, lng: -78.614 },
+    { name: 'KNIGHTDALE', lat: 35.787, lng: -78.490 },
+  ];
+  ctx.font = 'bold 11px monospace';
+  cities.forEach(c => {
+    const { x, y } = project(c.lat, c.lng);
+    if (x < 0 || x > W || y < 0 || y > H) return;
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillText(c.name, x, y);
+  });
+}
+
+function drawPin(x, y, price, isActive, isHovered) {
+  const c = pcolor(price);
+  const r = isActive ? 14 : isHovered ? 12 : 10;
+
+  // Drop shadow
+  ctx.shadowColor = c;
+  ctx.shadowBlur  = isActive ? 14 : isHovered ? 8 : 4;
+
+  // Circle
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = c;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Inner dark circle
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.58, 0, Math.PI * 2);
+  ctx.fillStyle = '#0f1117';
+  ctx.fill();
+
+  // Price label
+  if (isActive || isHovered || zoomLevel >= 12) {
+    const label = '$' + (price >= 1000 ? (price/1000).toFixed(1)+'k' : price);
+    ctx.font = `bold ${isActive ? 8 : 7}px monospace`;
+    ctx.fillStyle = c;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
+}
+
+// ── Hit detection ─────────────────────────────────────────────────────────────
+function hitTest(mx, my) {
+  for (let i = APTS.length - 1; i >= 0; i--) {
+    if (activeFilter !== 'all' && tier(APTS[i].price) !== activeFilter) continue;
+    const { x, y } = project(APTS[i].lat, APTS[i].lng);
+    const r = i === activeIdx ? 14 : 10;
+    if (Math.hypot(mx - x, my - y) <= r + 3) return i;
+  }
+  return -1;
+}
+
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+function showTooltip(i, cx, cy) {
+  const apt = APTS[i];
+  document.getElementById('tName').textContent  = apt.name;
+  document.getElementById('tPrice').textContent = '$' + apt.price.toLocaleString() + '/mo';
+  document.getElementById('tPrice').style.color = pcolor(apt.price);
+  document.getElementById('tLease').textContent = apt.lease + ' lease';
+  document.getElementById('tAddr').textContent  = apt.addr;
+  document.getElementById('tLink').href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(apt.addr);
+
+  tooltip.style.display = 'block';
+  const tw = tooltip.offsetWidth  || 220;
+  const th = tooltip.offsetHeight || 130;
+  let tx = cx + 16, ty = cy - th / 2;
+  if (tx + tw > W) tx = cx - tw - 10;
+  if (ty < 4) ty = 4;
+  if (ty + th > H) ty = H - th - 4;
+  tooltip.style.left = tx + 'px';
+  tooltip.style.top  = ty + 'px';
+}
+function hideTooltip() { tooltip.style.display = 'none'; }
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+const listEl = document.getElementById('aptList');
+APTS.forEach((apt, i) => {
+  const div = document.createElement('div');
+  div.className = 'apt-item';
+  div.id = `item-${i}`;
+  div.dataset.tier = tier(apt.price);
+  div.innerHTML = `<div class="apt-name">${apt.name}</div>
+    <div class="apt-meta">
+      <span class="ptag ${tier(apt.price)}">$${apt.price.toLocaleString()}</span>
+      <span class="ltag">${apt.lease}</span>
+    </div>`;
+  div.addEventListener('click', () => selectApt(i));
+  listEl.appendChild(div);
+});
+
+function selectApt(i) {
+  if (activeIdx !== null) document.getElementById(`item-${activeIdx}`)?.classList.remove('active');
+  activeIdx = i;
+  document.getElementById(`item-${i}`)?.classList.add('active');
+  document.getElementById(`item-${i}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // Pan to apt
+  centerLat = APTS[i].lat;
+  centerLng = APTS[i].lng;
+  if (zoomLevel < 12) zoomLevel = 13;
+  draw();
+  const { x, y } = project(APTS[i].lat, APTS[i].lng);
+  showTooltip(i, x, y);
+}
+
+// ── Filter ────────────────────────────────────────────────────────────────────
+function setFilter(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  let n = 0;
+  APTS.forEach((apt, i) => {
+    const show = f === 'all' || tier(apt.price) === f;
+    document.getElementById(`item-${i}`).classList.toggle('hidden', !show);
+    if (show) n++;
+  });
+  document.getElementById('count').textContent = n;
+  if (activeIdx !== null && f !== 'all' && tier(APTS[activeIdx].price) !== f) {
+    document.getElementById(`item-${activeIdx}`)?.classList.remove('active');
+    activeIdx = null;
+    hideTooltip();
+  }
+  draw();
+}
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+function zoom(delta) {
+  zoomLevel = Math.max(9, Math.min(16, zoomLevel + delta));
+  draw();
+}
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoom(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
+
+// ── Pan ───────────────────────────────────────────────────────────────────────
+canvas.addEventListener('mousedown', e => {
+  isPanning = true;
+  panStart  = { x: e.clientX, y: e.clientY, lat: centerLat, lng: centerLng };
+  canvas.classList.add('panning');
+});
+
+window.addEventListener('mousemove', e => {
+  if (!wrap.contains(e.target) && !isPanning) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  if (isPanning && panStart) {
+    const dx = e.clientX - panStart.x;
+    const dy = e.clientY - panStart.y;
+    const scale = TILE * Math.pow(2, zoomLevel);
+    centerLat = panStart.lat - (dy / scale) * 360; // approx
+    // Use proper inverse for lat
+    const centerWorld = latLngToWorld(panStart.lat, panStart.lng, zoomLevel);
+    const newWy = centerWorld.y - dy;
+    const n2 = Math.PI - 2 * Math.PI * newWy / scale;
+    centerLat = 180 / Math.PI * Math.atan(0.5 * (Math.exp(n2) - Math.exp(-n2)));
+    centerLng = panStart.lng - (dx / scale) * 360;
+    hideTooltip();
+    draw();
+    return;
+  }
+
+  const hit = hitTest(mx, my);
+  if (hit !== -1) {
+    hoveredIdx = hit;
+    canvas.style.cursor = 'pointer';
+    showTooltip(hit, mx, my);
+  } else {
+    hoveredIdx = null;
+    canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
+    if (activeIdx === null) hideTooltip();
+  }
+  draw();
+});
+
+window.addEventListener('mouseup', () => {
+  isPanning = false;
+  panStart  = null;
+  canvas.classList.remove('panning');
+});
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const hit = hitTest(mx, my);
+  if (hit !== -1) selectApt(hit);
+  else { activeIdx = null; hideTooltip(); draw(); }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>
